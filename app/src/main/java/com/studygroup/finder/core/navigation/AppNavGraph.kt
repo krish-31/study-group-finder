@@ -28,6 +28,9 @@ import com.studygroup.finder.ui.groups.CreateGroupScreen
 import com.studygroup.finder.ui.groups.GroupDetailScreen
 import com.studygroup.finder.ui.search.SearchScreen
 import com.studygroup.finder.ui.search.SearchViewModel
+import com.studygroup.finder.ui.sessions.ScheduleSessionScreen
+import com.studygroup.finder.ui.sessions.SessionDetailScreen
+import com.studygroup.finder.ui.sessions.SessionViewModel
 
 /**
  * Top-level navigation graph for the Study Group Finder app.
@@ -250,11 +253,27 @@ fun AppNavGraph(
             )
         ) { backStackEntry ->
             val groupId = backStackEntry.arguments?.getString(Screen.ScheduleSession.ARG_GROUP_ID).orEmpty()
-            PlaceholderScreen("Schedule Session\ngroupId = $groupId")
+            val sessionViewModel: SessionViewModel = hiltViewModel()
+
+            ScheduleSessionScreen(
+                groupId = groupId,
+                viewModel = sessionViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(Screen.SessionDetail.route) {
-            PlaceholderScreen("Session Detail")
+            val sessionViewModel: SessionViewModel = hiltViewModel()
+
+            SessionDetailScreen(
+                groupId = "", // SessionDetail accessed without a groupId arg
+                viewModel = sessionViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         // ── Notifications ───────────────────────────
