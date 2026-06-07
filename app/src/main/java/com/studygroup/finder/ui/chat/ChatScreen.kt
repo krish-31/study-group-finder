@@ -153,7 +153,7 @@ fun ChatScreen(
                     .fillMaxWidth()
             ) {
                 // Loading state
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = uiState.isLoading,
                     enter = fadeIn(),
                     exit = fadeOut()
@@ -170,7 +170,7 @@ fun ChatScreen(
                 }
 
                 // Empty state
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = !uiState.isLoading && uiState.messages.isEmpty(),
                     enter = fadeIn(),
                     exit = fadeOut()
@@ -179,7 +179,7 @@ fun ChatScreen(
                 }
 
                 // Messages list (reverse layout = false; messages ordered ASC from Firestore)
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = !uiState.isLoading && uiState.messages.isNotEmpty(),
                     enter = fadeIn(),
                     exit = fadeOut()

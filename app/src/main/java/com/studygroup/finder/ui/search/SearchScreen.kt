@@ -213,7 +213,7 @@ fun SearchScreen(
             Box(modifier = Modifier.fillMaxSize()) {
 
                 // Loading shimmer placeholders
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = isLoading,
                     enter = fadeIn(),
                     exit = fadeOut()
@@ -233,7 +233,7 @@ fun SearchScreen(
                 }
 
                 // Empty state
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = !isLoading && results.isEmpty(),
                     enter = fadeIn(animationSpec = tween(400)),
                     exit = fadeOut()
@@ -242,7 +242,7 @@ fun SearchScreen(
                 }
 
                 // Results list
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = !isLoading && results.isNotEmpty(),
                     enter = fadeIn(animationSpec = tween(300)),
                     exit = fadeOut()
