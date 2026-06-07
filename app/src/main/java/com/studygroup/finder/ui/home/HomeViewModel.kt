@@ -7,6 +7,8 @@ import com.studygroup.finder.data.model.User
 import com.studygroup.finder.data.repository.AuthRepository
 import com.studygroup.finder.data.repository.StudyGroupRepository
 import com.studygroup.finder.data.repository.UserRepository
+import com.studygroup.finder.core.utils.ErrorHandler
+import com.studygroup.finder.core.utils.NetworkUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +46,8 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
-    private val studyGroupRepository: StudyGroupRepository
+    private val studyGroupRepository: StudyGroupRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -60,20 +63,32 @@ class HomeViewModel @Inject constructor(
      */
     private fun loadUserProfile() {
         viewModelScope.launch {
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "No internet connection. Please check your network settings and try again.") }
+                return@launch
+            }
+
             val firebaseUser = authRepository.getCurrentUser()
             if (firebaseUser != null) {
-                userRepository.getUserProfile(firebaseUser.uid)
-                    .onSuccess { user ->
-                        _uiState.update { it.copy(currentUser = user) }
-                    }
-                    .onFailure { throwable ->
-                        _uiState.update {
-                            it.copy(
-                                errorMessage = throwable.localizedMessage
-                                    ?: "Failed to load profile"
-                            )
+                try {
+                    userRepository.getUserProfile(firebaseUser.uid)
+                        .onSuccess { user ->
+                            _uiState.update { it.copy(currentUser = user) }
                         }
+                        .onFailure { throwable ->
+                            _uiState.update {
+                                it.copy(
+                                    errorMessage = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                                )
+                            }
+                        }
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = ErrorHandler.getErrorMessage(e, networkUtils)
+                        )
                     }
+                }
             }
         }
     }
@@ -84,30 +99,43 @@ class HomeViewModel @Inject constructor(
      */
     private fun observeGroups() {
         viewModelScope.launch {
-            studyGroupRepository.getAllGroupsFlow()
-                .catch { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = throwable.localizedMessage
-                                ?: "Failed to load groups"
-                        )
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "No internet connection. Please check your network settings and try again.") }
+                return@launch
+            }
+
+            try {
+                studyGroupRepository.getAllGroupsFlow()
+                    .catch { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
                     }
-                }
-                .collect { allGroups ->
-                    val userId = authRepository.getCurrentUser()?.uid.orEmpty()
-                    _uiState.update {
-                        it.copy(
-                            myGroups = allGroups.filter { group ->
-                                userId in group.members
-                            },
-                            discoverGroups = allGroups.filter { group ->
-                                !group.isPrivate
-                            },
-                            isLoading = false
-                        )
+                    .collect { allGroups ->
+                        val userId = authRepository.getCurrentUser()?.uid.orEmpty()
+                        _uiState.update {
+                            it.copy(
+                                myGroups = allGroups.filter { group ->
+                                    userId in group.members
+                                },
+                                discoverGroups = allGroups.filter { group ->
+                                    !group.isPrivate
+                                },
+                                isLoading = false
+                            )
+                        }
                     }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 

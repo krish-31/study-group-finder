@@ -14,6 +14,7 @@ import com.google.firebase.firestore.DocumentId
  * @property joinedGroups List of group IDs the user has joined.
  * @property createdAt Account creation timestamp in epoch milliseconds.
  * @property isApproved Whether the user is approved by an admin (default true).
+ * @property isAdmin Whether the user has admin privileges (set in Firestore console).
  */
 data class User(
     @DocumentId
@@ -25,7 +26,8 @@ data class User(
     val subjects: List<String> = emptyList(),
     val joinedGroups: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
-    val isApproved: Boolean = true
+    val isApproved: Boolean = true,
+    val isAdmin: Boolean = false
 ) {
     companion object {
         const val COLLECTION = "users"

@@ -2,6 +2,8 @@ package com.studygroup.finder.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.studygroup.finder.core.utils.ErrorHandler
+import com.studygroup.finder.core.utils.NetworkUtils
 import com.studygroup.finder.data.model.ChatMessage
 import com.studygroup.finder.data.repository.AuthRepository
 import com.studygroup.finder.data.repository.ChatRepository
@@ -43,7 +45,8 @@ data class ChatUiState(
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val authRepository: AuthRepository,
-    private val studyGroupRepository: StudyGroupRepository
+    private val studyGroupRepository: StudyGroupRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -68,29 +71,52 @@ class ChatViewModel @Inject constructor(
 
         // Load group name for the top bar
         viewModelScope.launch {
-            studyGroupRepository.getGroupById(groupId)
-                .onSuccess { group ->
-                    _uiState.update { it.copy(groupName = group.name) }
+            try {
+                studyGroupRepository.getGroupById(groupId)
+                    .onSuccess { group ->
+                        _uiState.update { it.copy(groupName = group.name) }
+                    }
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                errorMessage = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
 
         // Stream messages
         viewModelScope.launch {
-            chatRepository.getMessagesFlow(groupId)
-                .catch { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = throwable.localizedMessage
-                                ?: "Failed to load messages"
-                        )
+            try {
+                chatRepository.getMessagesFlow(groupId)
+                    .catch { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
                     }
-                }
-                .collect { messages ->
-                    _uiState.update {
-                        it.copy(messages = messages, isLoading = false)
+                    .collect { messages ->
+                        _uiState.update {
+                            it.copy(messages = messages, isLoading = false)
+                        }
                     }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -103,6 +129,15 @@ class ChatViewModel @Inject constructor(
     fun sendMessage(groupId: String, content: String) {
         if (content.isBlank()) return
 
+        if (!networkUtils.isNetworkAvailable()) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "No internet connection. Please check your network settings and try again."
+                )
+            }
+            return
+        }
+
         val firebaseUser = authRepository.getCurrentUser() ?: return
         val message = ChatMessage(
             groupId = groupId,
@@ -113,15 +148,22 @@ class ChatViewModel @Inject constructor(
         )
 
         viewModelScope.launch {
-            chatRepository.sendMessage(message)
-                .onFailure { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            errorMessage = throwable.localizedMessage
-                                ?: "Failed to send message"
-                        )
+            try {
+                chatRepository.sendMessage(message)
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                errorMessage = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
                     }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 

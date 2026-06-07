@@ -15,4 +15,7 @@ interface JoinRequestRepository {
     fun getPendingRequestsForGroup(groupId: String): Flow<List<JoinRequest>>
 
     fun getRequestsByUser(userId: String): Flow<List<JoinRequest>>
+
+    /** Stream all pending join requests across all groups (used by admin panel). */
+    fun getAllPendingRequestsFlow(): Flow<List<JoinRequest>>
 }

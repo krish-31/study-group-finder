@@ -8,6 +8,8 @@ import com.studygroup.finder.data.repository.AuthRepository
 import com.studygroup.finder.data.repository.NotificationRepository
 import com.studygroup.finder.data.repository.SessionRepository
 import com.studygroup.finder.data.repository.StudyGroupRepository
+import com.studygroup.finder.core.utils.ErrorHandler
+import com.studygroup.finder.core.utils.NetworkUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,7 +65,8 @@ class SessionViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val notificationRepository: NotificationRepository,
     private val studyGroupRepository: StudyGroupRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SessionUiState())
@@ -101,24 +104,42 @@ class SessionViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            sessionRepository.getSessionsForGroup(groupId)
-                .catch { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = throwable.localizedMessage
-                                ?: "Failed to load sessions"
-                        )
-                    }
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "No internet connection. Please check your network settings and try again."
+                    )
                 }
-                .collect { sessions ->
-                    _uiState.update {
-                        it.copy(
-                            sessions = sessions.sortedBy { s -> s.dateTime },
-                            isLoading = false
-                        )
+                return@launch
+            }
+
+            try {
+                sessionRepository.getSessionsForGroup(groupId)
+                    .catch { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                message = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
                     }
+                    .collect { sessions ->
+                        _uiState.update {
+                            it.copy(
+                                sessions = sessions.sortedBy { s -> s.dateTime },
+                                isLoading = false
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -140,38 +161,55 @@ class SessionViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-
-            val session = StudySession(
-                groupId = groupId,
-                title = form.title.trim(),
-                dateTime = form.dateTimeMillis,
-                durationMinutes = duration,
-                location = form.location.trim().ifBlank { "Online" },
-                status = StudySession.STATUS_UPCOMING
-            )
-
-            sessionRepository.createSession(session)
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = "Session scheduled successfully!",
-                            isSessionCreated = true,
-                            formState = SessionFormState() // reset form
-                        )
-                    }
-                    // Notify all group members
-                    notifyGroupMembers(groupId, session)
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "No internet connection. Please check your network settings and try again."
+                    )
                 }
-                .onFailure { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = throwable.localizedMessage
-                                ?: "Failed to schedule session"
-                        )
+                return@launch
+            }
+
+            try {
+                val session = StudySession(
+                    groupId = groupId,
+                    title = form.title.trim(),
+                    dateTime = form.dateTimeMillis,
+                    durationMinutes = duration,
+                    location = form.location.trim().ifBlank { "Online" },
+                    status = StudySession.STATUS_UPCOMING
+                )
+
+                sessionRepository.createSession(session)
+                    .onSuccess {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                message = "Session scheduled successfully!",
+                                isSessionCreated = true,
+                                formState = SessionFormState() // reset form
+                            )
+                        }
+                        // Notify all group members
+                        notifyGroupMembers(groupId, session)
                     }
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                message = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -180,18 +218,30 @@ class SessionViewModel @Inject constructor(
      */
     fun markSessionComplete(sessionId: String) {
         viewModelScope.launch {
-            sessionRepository.updateSessionStatus(sessionId, StudySession.STATUS_COMPLETED)
-                .onSuccess {
-                    _uiState.update { it.copy(message = "Session marked as completed") }
-                }
-                .onFailure { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            message = throwable.localizedMessage
-                                ?: "Failed to update session"
-                        )
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update { it.copy(message = "No internet connection. Failed to update session.") }
+                return@launch
+            }
+
+            try {
+                sessionRepository.updateSessionStatus(sessionId, StudySession.STATUS_COMPLETED)
+                    .onSuccess {
+                        _uiState.update { it.copy(message = "Session marked as completed") }
                     }
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                message = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -200,18 +250,30 @@ class SessionViewModel @Inject constructor(
      */
     fun markSessionActive(sessionId: String) {
         viewModelScope.launch {
-            sessionRepository.updateSessionStatus(sessionId, StudySession.STATUS_ACTIVE)
-                .onSuccess {
-                    _uiState.update { it.copy(message = "Session started!") }
-                }
-                .onFailure { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            message = throwable.localizedMessage
-                                ?: "Failed to start session"
-                        )
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update { it.copy(message = "No internet connection. Failed to start session.") }
+                return@launch
+            }
+
+            try {
+                sessionRepository.updateSessionStatus(sessionId, StudySession.STATUS_ACTIVE)
+                    .onSuccess {
+                        _uiState.update { it.copy(message = "Session started!") }
                     }
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                message = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -234,23 +296,29 @@ class SessionViewModel @Inject constructor(
      */
     private fun notifyGroupMembers(groupId: String, session: StudySession) {
         viewModelScope.launch {
-            studyGroupRepository.getGroupById(groupId)
-                .onSuccess { group ->
-                    val dateStr = SimpleDateFormat(
-                        "EEE, dd MMM yyyy 'at' h:mm a",
-                        Locale.getDefault()
-                    ).format(Date(session.dateTime))
+            if (!networkUtils.isNetworkAvailable()) return@launch
 
-                    for (memberId in group.members) {
-                        val notification = Notification(
-                            userId = memberId,
-                            title = "New Session: ${session.title}",
-                            message = "${group.name} scheduled a session on $dateStr",
-                            type = Notification.TYPE_SESSION
-                        )
-                        notificationRepository.createNotification(notification)
+            try {
+                studyGroupRepository.getGroupById(groupId)
+                    .onSuccess { group ->
+                        val dateStr = SimpleDateFormat(
+                            "EEE, dd MMM yyyy 'at' h:mm a",
+                            Locale.getDefault()
+                        ).format(Date(session.dateTime))
+
+                        for (memberId in group.members) {
+                            val notification = Notification(
+                                userId = memberId,
+                                title = "New Session: ${session.title}",
+                                message = "${group.name} scheduled a session on $dateStr",
+                                type = Notification.TYPE_SESSION
+                            )
+                            notificationRepository.createNotification(notification)
+                        }
                     }
-                }
+            } catch (e: Exception) {
+                // Ignore background notification failure
+            }
         }
     }
 }

@@ -15,4 +15,7 @@ interface UserRepository {
     suspend fun updateUserProfile(user: User): Result<Unit>
 
     fun getUserProfileFlow(userId: String): Flow<User?>
+
+    /** Stream all registered users (used by admin panel). */
+    fun getAllUsersFlow(): Flow<List<User>>
 }

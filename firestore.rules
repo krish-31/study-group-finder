@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper Functions ───────────────────────────────────
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the current user is an admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Check if the current user is a member (or creator) of a study group
+    function isGroupMember(groupId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/study_groups/$(groupId)).data.members ||
+        get(/databases/$(database)/documents/study_groups/$(groupId)).data.createdBy == request.auth.uid
+      );
+    }
+
+    // ── Users Collection ───────────────────────────────────
+    match /users/{userId} {
+      // Allow any authenticated user to view user profiles
+      allow read: if isAuthenticated();
+      
+      // A user can create their profile. Ensure they cannot set isAdmin=true unless they are already an admin
+      allow create: if isAuthenticated() && 
+        request.auth.uid == userId && 
+        (!request.resource.data.keys().contains('isAdmin') || request.resource.data.isAdmin == false || isAdmin());
+      
+      // Owners can update their profile, but cannot modify their own 'isAdmin' status
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == userId && (request.resource.data.isAdmin == resource.data.isAdmin || isAdmin())) || 
+        isAdmin()
+      );
+      
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── Study Groups Collection ────────────────────────────
+    match /study_groups/{groupId} {
+      // Anyone authenticated can read public groups, or groups they are members of
+      allow read: if isAuthenticated() && (
+        resource.data.isPrivate == false ||
+        request.auth.uid in resource.data.members ||
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Any authenticated user can create a study group
+      allow create: if isAuthenticated();
+      
+      // Members or creators can update group details (e.g. adding members)
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.createdBy || 
+        request.auth.uid in request.resource.data.members || 
+        isAdmin()
+      );
+      
+      // Only creators or admins can delete groups
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+    }
+
+    // ── Study Sessions Collection ──────────────────────────
+    match /study_sessions/{sessionId} {
+      // Only group members or admins can view sessions
+      allow read: if isAuthenticated() && (isGroupMember(resource.data.groupId) || isAdmin());
+      
+      // Only group members or admins can create sessions
+      allow create: if isAuthenticated() && (isGroupMember(request.resource.data.groupId) || isAdmin());
+      
+      // Only group members or admins can update/delete sessions
+      allow update, delete: if isAuthenticated() && (isGroupMember(resource.data.groupId) || isAdmin());
+    }
+
+    // ── Chat Messages Collection ───────────────────────────
+    match /chat_messages/{messageId} {
+      // Only group members or admins can read chat messages
+      allow read: if isAuthenticated() && (isGroupMember(resource.data.groupId) || isAdmin());
+      
+      // Only group members can send messages (with senderId matching their auth uid)
+      allow create: if isAuthenticated() && 
+        isGroupMember(request.resource.data.groupId) && 
+        request.resource.data.senderId == request.auth.uid;
+      
+      // Only the sender or admins can update/delete messages
+      allow update, delete: if isAuthenticated() && (resource.data.senderId == request.auth.uid || isAdmin());
+    }
+
+    // ── Join Requests Collection ───────────────────────────
+    match /join_requests/{requestId} {
+      // The requester, group creator, or admins can view requests
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || 
+        request.auth.uid == get(/databases/$(database)/documents/study_groups/$(resource.data.groupId)).data.createdBy || 
+        isAdmin()
+      );
+      
+      // Anyone can request to join a group for themselves
+      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.userId || isAdmin());
+      
+      // Only the group creator or admins can update requests (approve/reject)
+      allow update: if isAuthenticated() && (
+        request.auth.uid == get(/databases/$(database)/documents/study_groups/$(resource.data.groupId)).data.createdBy || 
+        isAdmin()
+      );
+      
+      // The requester, group creator, or admins can delete requests
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId || 
+        request.auth.uid == get(/databases/$(database)/documents/study_groups/$(resource.data.groupId)).data.createdBy || 
+        isAdmin()
+      );
+    }
+
+    // ── Notifications Collection ───────────────────────────
+    match /notifications/{notificationId} {
+      // Only the recipient of the notification or admins can read it
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.recipientId || isAdmin());
+      
+      // Anyone authenticated can create/send a notification (e.g. to notify a user)
+      allow create: if isAuthenticated();
+      
+      // Only the recipient or admins can update/delete
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.recipientId || isAdmin());
+    }
+
+    // ── Reviews Collection ─────────────────────────────────
+    match /reviews/{reviewId} {
+      // Anyone authenticated can view reviews
+      allow read: if isAuthenticated();
+      
+      // Only group members can write a review for a group
+      allow create: if isAuthenticated() && 
+        isGroupMember(request.resource.data.groupId) && 
+        request.auth.uid == request.resource.data.reviewerId;
+      
+      // Only the reviewer or admins can edit/delete reviews
+      allow update, delete: if isAuthenticated() && (resource.data.reviewerId == request.auth.uid || isAdmin());
+    }
+
+    // ── Achievements Collection ────────────────────────────
+    match /achievements/{achievementId} {
+      // Anyone authenticated can read achievements
+      allow read: if isAuthenticated();
+      
+      // Only admins can create/update/delete achievements
+      allow write: if isAdmin();
+    }
+  }
+}

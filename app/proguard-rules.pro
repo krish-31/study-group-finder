@@ -16,7 +16,8 @@
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 
 # Keep data classes used with Firestore
--keepclassmembers class com.studygroupfinder.app.data.model.** {
+-keep class com.studygroup.finder.data.model.** { *; }
+-keepclassmembers class com.studygroup.finder.data.model.** {
     <init>(...);
     <fields>;
 }

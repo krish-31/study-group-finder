@@ -70,6 +70,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     currentRoute: String?,
     unreadNotificationCount: Int = 0,
+    isAdmin: Boolean = false,
     onNavigateToSearch: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToCreateGroup: () -> Unit,
@@ -129,6 +130,7 @@ fun HomeScreen(
         bottomBar = {
             BottomNavBar(
                 currentRoute = currentRoute,
+                isAdmin = isAdmin,
                 onItemClick = onBottomNavClick
             )
         },

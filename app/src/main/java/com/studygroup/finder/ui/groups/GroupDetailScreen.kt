@@ -28,9 +28,12 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -71,6 +74,7 @@ import com.studygroup.finder.data.model.Review
 import com.studygroup.finder.data.model.StudyGroup
 import com.studygroup.finder.data.model.StudySession
 import com.studygroup.finder.data.model.User
+import com.studygroup.finder.ui.components.EmptyStateView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,7 +95,8 @@ fun GroupDetailScreen(
     viewModel: GroupViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToChat: (groupId: String) -> Unit,
-    onNavigateToSchedule: (groupId: String) -> Unit
+    onNavigateToSchedule: (groupId: String) -> Unit,
+    onNavigateToJoinRequests: (groupId: String) -> Unit
 ) {
     val group by viewModel.groupDetail.collectAsState()
     val members by viewModel.groupMembers.collectAsState()
@@ -100,12 +105,21 @@ fun GroupDetailScreen(
     val currentUserProfile by viewModel.currentUserProfile.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val message by viewModel.message.collectAsState()
+    val myRequestStatus by viewModel.myRequestStatus.collectAsState()
+    val pendingRequests by viewModel.pendingRequests.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(groupId) {
+    val currentUserId = currentUserProfile?.userId.orEmpty()
+    val isCreator = group?.createdBy == currentUserId
+    val isMember = currentUserId in (group?.members ?: emptyList())
+
+    LaunchedEffect(groupId, isCreator) {
         viewModel.loadGroupDetail(groupId)
+        if (isCreator) {
+            viewModel.observePendingRequests(groupId)
+        }
     }
 
     LaunchedEffect(message) {
@@ -125,6 +139,26 @@ fun GroupDetailScreen(
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    if (isCreator && group != null) {
+                        IconButton(onClick = { onNavigateToJoinRequests(group!!.groupId) }) {
+                            BadgedBox(
+                                badge = {
+                                    if (pendingRequests.isNotEmpty()) {
+                                        Badge {
+                                            Text(pendingRequests.size.toString())
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PersonAdd,
+                                    contentDescription = "Join Requests"
+                                )
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -138,10 +172,6 @@ fun GroupDetailScreen(
                 .padding(innerPadding)
         ) {
             group?.let { currentGroup ->
-                val currentUserId = currentUserProfile?.userId.orEmpty()
-                val isMember = currentUserId in currentGroup.members
-                val isCreator = currentGroup.createdBy == currentUserId
-
                 Column(modifier = Modifier.fillMaxSize()) {
 
                     // 1. Header/Banner Info Area
@@ -149,6 +179,7 @@ fun GroupDetailScreen(
                         group = currentGroup,
                         isMember = isMember,
                         isCreator = isCreator,
+                        myRequestStatus = myRequestStatus,
                         onJoinClick = { viewModel.sendJoinRequest(currentGroup.groupId) },
                         onChatClick = { onNavigateToChat(currentGroup.groupId) },
                         onScheduleClick = { onNavigateToSchedule(currentGroup.groupId) }
@@ -229,6 +260,7 @@ private fun GroupBannerArea(
     group: StudyGroup,
     isMember: Boolean,
     isCreator: Boolean,
+    myRequestStatus: String?,
     onJoinClick: () -> Unit,
     onChatClick: () -> Unit,
     onScheduleClick: () -> Unit
@@ -248,7 +280,7 @@ private fun GroupBannerArea(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
-            // Subject tag & Privacy state
+            // Subject tag & Privacy state & Member status
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -287,6 +319,21 @@ private fun GroupBannerArea(
                                 color = MaterialTheme.colorScheme.secondary
                             )
                         }
+                    }
+                }
+
+                if (isMember) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF22C55E).copy(alpha = 0.1f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Member",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFF22C55E)
+                        )
                     }
                 }
             }
@@ -381,18 +428,33 @@ private fun GroupBannerArea(
                         }
                     }
                 } else {
-                    Button(
-                        onClick = onJoinClick,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text(
-                            text = if (group.isPrivate) "Request to Join Group" else "Join Study Group",
-                            fontWeight = FontWeight.Bold
-                        )
+                    if (myRequestStatus == "pending") {
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        ) {
+                            Text("Request Sent", fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Button(
+                            onClick = onJoinClick,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                text = if (group.isPrivate) "Request to Join Group" else "Join Study Group",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -406,9 +468,11 @@ private fun GroupBannerArea(
 @Composable
 private fun MembersTab(members: List<User>) {
     if (members.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No members profiles found", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        EmptyStateView(
+            icon = Icons.Default.Group,
+            title = "No Members",
+            subtitle = "No members profiles found."
+        )
     } else {
         LazyColumn(
             contentPadding = PaddingValues(16.dp),
@@ -483,9 +547,11 @@ private fun MembersTab(members: List<User>) {
 @Composable
 private fun SessionsTab(sessions: List<StudySession>) {
     if (sessions.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No scheduled study sessions yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        EmptyStateView(
+            icon = Icons.Default.Schedule,
+            title = "No Sessions",
+            subtitle = "No scheduled study sessions yet."
+        )
     } else {
         LazyColumn(
             contentPadding = PaddingValues(16.dp),
@@ -587,9 +653,11 @@ private fun SessionsTab(sessions: List<StudySession>) {
 @Composable
 private fun ReviewsTab(reviews: List<Review>, members: List<User>) {
     if (reviews.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No reviews submitted for this group yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        EmptyStateView(
+            icon = Icons.Default.Star,
+            title = "No Reviews",
+            subtitle = "No reviews submitted for this group yet."
+        )
     } else {
         LazyColumn(
             contentPadding = PaddingValues(16.dp),

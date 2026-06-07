@@ -64,4 +64,19 @@ class UserRepositoryImpl @Inject constructor(
 
         awaitClose { listenerRegistration.remove() }
     }
+
+    override fun getAllUsersFlow(): Flow<List<User>> = callbackFlow {
+        val listenerRegistration: ListenerRegistration = usersCollection
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val users = snapshot?.toObjects(User::class.java).orEmpty()
+                trySend(users)
+            }
+
+        awaitClose { listenerRegistration.remove() }
+    }
 }

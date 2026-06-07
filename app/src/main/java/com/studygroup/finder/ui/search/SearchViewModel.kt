@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.studygroup.finder.data.model.StudyGroup
 import com.studygroup.finder.data.repository.StudyGroupRepository
+import com.studygroup.finder.core.utils.ErrorHandler
+import com.studygroup.finder.core.utils.NetworkUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -42,7 +44,8 @@ enum class SearchCategory(val label: String) {
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val studyGroupRepository: StudyGroupRepository
+    private val studyGroupRepository: StudyGroupRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
     // ── Search query ───────────────────────────────
@@ -57,20 +60,32 @@ class SearchViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    // ── Error state ────────────────────────────────
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     /**
      * Debounced query that drives the search results.
      * Emits after 300 ms of inactivity.
      */
     private val debouncedQuery = _searchQuery
         .debounce(300L)
-        .onEach { _isLoading.value = true }
+        .onEach { 
+            _isLoading.value = true
+            _errorMessage.value = null
+        }
 
     /**
      * Live search results — filtered by the debounced query text
      * (matches name OR subject, case-insensitive) and the selected category.
      */
     val searchResults: StateFlow<List<StudyGroup>> = combine(
-        debouncedQuery.flatMapLatest { studyGroupRepository.getAllGroupsFlow() },
+        debouncedQuery.flatMapLatest { query ->
+            if (!networkUtils.isNetworkAvailable()) {
+                _errorMessage.value = "No internet connection. Please check your network settings and try again."
+            }
+            studyGroupRepository.getAllGroupsFlow()
+        },
         debouncedQuery,
         _selectedCategory
     ) { allGroups, query, category ->
@@ -87,8 +102,9 @@ class SearchViewModel @Inject constructor(
         _isLoading.value = false
         filtered
     }
-        .catch {
+        .catch { throwable ->
             _isLoading.value = false
+            _errorMessage.value = ErrorHandler.getErrorMessage(throwable, networkUtils)
             emit(emptyList())
         }
         .stateIn(
@@ -113,5 +129,17 @@ class SearchViewModel @Inject constructor(
     fun onCategorySelected(category: SearchCategory) {
         _selectedCategory.value = category
         _isLoading.value = true
+    }
+
+    fun clearError() {
+        _errorMessage.value = null
+    }
+
+    fun refresh() {
+        _isLoading.value = true
+        _errorMessage.value = null
+        val current = _searchQuery.value
+        _searchQuery.value = ""
+        _searchQuery.value = current
     }
 }

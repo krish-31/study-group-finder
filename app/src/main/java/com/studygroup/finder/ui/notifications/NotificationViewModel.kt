@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.studygroup.finder.data.model.Notification
 import com.studygroup.finder.data.repository.AuthRepository
 import com.studygroup.finder.data.repository.NotificationRepository
+import com.studygroup.finder.core.utils.ErrorHandler
+import com.studygroup.finder.core.utils.NetworkUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +40,8 @@ data class NotificationUiState(
 @HiltViewModel
 class NotificationViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotificationUiState())
@@ -53,7 +56,7 @@ class NotificationViewModel @Inject constructor(
     /**
      * Start streaming notifications for the current user.
      */
-    private fun loadNotifications() {
+    fun loadNotifications() {
         val userId = authRepository.getCurrentUser()?.uid.orEmpty()
         if (userId.isEmpty()) {
             _uiState.update { it.copy(isLoading = false) }
@@ -61,25 +64,44 @@ class NotificationViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            notificationRepository.getNotificationsForUser(userId)
-                .catch { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = throwable.localizedMessage
-                                ?: "Failed to load notifications"
-                        )
-                    }
+            _uiState.update { it.copy(isLoading = true, message = null) }
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = "No internet connection. Please check your network settings and try again."
+                    )
                 }
-                .collect { notifications ->
-                    _uiState.update {
-                        it.copy(
-                            notifications = notifications,
-                            unreadCount = notifications.count { n -> !n.isRead },
-                            isLoading = false
-                        )
+                return@launch
+            }
+
+            try {
+                notificationRepository.getNotificationsForUser(userId)
+                    .catch { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                message = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
                     }
+                    .collect { notifications ->
+                        _uiState.update {
+                            it.copy(
+                                notifications = notifications,
+                                unreadCount = notifications.count { n -> !n.isRead },
+                                isLoading = false
+                            )
+                        }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -88,15 +110,27 @@ class NotificationViewModel @Inject constructor(
      */
     fun markAsRead(notificationId: String) {
         viewModelScope.launch {
-            notificationRepository.markAsRead(notificationId)
-                .onFailure { throwable ->
-                    _uiState.update {
-                        it.copy(
-                            message = throwable.localizedMessage
-                                ?: "Failed to mark as read"
-                        )
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update { it.copy(message = "No internet connection. Failed to update notification.") }
+                return@launch
+            }
+
+            try {
+                notificationRepository.markAsRead(notificationId)
+                    .onFailure { throwable ->
+                        _uiState.update {
+                            it.copy(
+                                message = ErrorHandler.getErrorMessage(throwable, networkUtils)
+                            )
+                        }
                     }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
                 }
+            }
         }
     }
 
@@ -106,10 +140,23 @@ class NotificationViewModel @Inject constructor(
     fun markAllAsRead() {
         val unread = _uiState.value.notifications.filter { !it.isRead }
         viewModelScope.launch {
-            for (notification in unread) {
-                notificationRepository.markAsRead(notification.notificationId)
+            if (!networkUtils.isNetworkAvailable()) {
+                _uiState.update { it.copy(message = "No internet connection. Failed to update notifications.") }
+                return@launch
             }
-            _uiState.update { it.copy(message = "All notifications marked as read") }
+
+            try {
+                for (notification in unread) {
+                    notificationRepository.markAsRead(notification.notificationId)
+                }
+                _uiState.update { it.copy(message = "All notifications marked as read") }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        message = ErrorHandler.getErrorMessage(e, networkUtils)
+                    )
+                }
+            }
         }
     }
 

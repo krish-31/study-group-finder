@@ -1,10 +1,12 @@
 package com.studygroup.finder.ui.home.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
@@ -37,8 +39,8 @@ data class BottomNavItem(
     val unselectedIcon: ImageVector
 )
 
-/** The five bottom navigation destinations. */
-val bottomNavItems = listOf(
+/** The core bottom navigation destinations (always visible). */
+private val coreNavItems = listOf(
     BottomNavItem(
         route = Screen.Home.route,
         label = "Home",
@@ -71,22 +73,42 @@ val bottomNavItems = listOf(
     )
 )
 
+/** Admin-only navigation item. */
+private val adminNavItem = BottomNavItem(
+    route = Screen.AdminPanel.route,
+    label = "Admin",
+    selectedIcon = Icons.Filled.AdminPanelSettings,
+    unselectedIcon = Icons.Outlined.AdminPanelSettings
+)
+
 /**
- * Reusable Material 3 bottom navigation bar with five destinations.
+ * The list of items used externally when `isAdmin = false`.
+ * Kept for backward compatibility with any code referencing [bottomNavItems].
+ */
+val bottomNavItems: List<BottomNavItem> = coreNavItems
+
+/**
+ * Reusable Material 3 bottom navigation bar.
+ *
+ * When [isAdmin] is true, an additional "Admin" tab is shown at the end.
  *
  * @param currentRoute  the currently active route (to highlight the correct tab).
+ * @param isAdmin       whether the current user has admin privileges.
  * @param onItemClick   callback invoked with the target route when a tab is tapped.
  */
 @Composable
 fun BottomNavBar(
     currentRoute: String?,
+    isAdmin: Boolean = false,
     onItemClick: (String) -> Unit
 ) {
+    val items = if (isAdmin) coreNavItems + adminNavItem else coreNavItems
+
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp
     ) {
-        bottomNavItems.forEach { item ->
+        items.forEach { item ->
             val isSelected = currentRoute == item.route
             NavigationBarItem(
                 selected = isSelected,

@@ -28,6 +28,11 @@ sealed class Screen(val route: String) {
 
     data object CreateGroup : Screen("create_group")
 
+    data object JoinRequests : Screen("join_requests/{groupId}") {
+        const val ARG_GROUP_ID = "groupId"
+        fun createRoute(groupId: String): String = "join_requests/$groupId"
+    }
+
     // ── Search ──────────────────────────────────────
     data object Search : Screen("search")
 

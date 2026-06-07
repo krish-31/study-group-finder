@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,13 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -34,11 +33,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,13 +51,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.studygroup.finder.ui.components.EmptyStateView
 import com.studygroup.finder.ui.home.components.GroupCard
 
 /**
@@ -82,15 +83,25 @@ fun SearchScreen(
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val results by viewModel.searchResults.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     val focusRequester = remember { FocusRequester() }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Auto-focus the search field when the screen opens
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
 
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -210,56 +221,35 @@ fun SearchScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // ── Results area ────────────────────────
-            Box(modifier = Modifier.fillMaxSize()) {
-
-                // Loading shimmer placeholders
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isLoading,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
+            PullToRefreshBox(
+                isRefreshing = isLoading,
+                onRefresh = { viewModel.refresh() },
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                if (!isLoading && results.isEmpty()) {
+                    EmptyStateView(
+                        icon = Icons.Outlined.SearchOff,
+                        title = if (query.isNotBlank()) "No groups found for '$query'" else "Start typing to search",
+                        subtitle = if (query.isNotBlank()) "Try different keywords or change the category filter." else "Find study groups by name or subject.",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    )
+                } else if (!isLoading) {
                     LazyColumn(
                         contentPadding = PaddingValues(
                             start = 20.dp,
                             end = 20.dp,
                             bottom = 80.dp
                         ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(5) {
-                            ShimmerGroupCard()
-                        }
-                    }
-                }
-
-                // Empty state
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = !isLoading && results.isEmpty(),
-                    enter = fadeIn(animationSpec = tween(400)),
-                    exit = fadeOut()
-                ) {
-                    EmptySearchState(query = query)
-                }
-
-                // Results list
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = !isLoading && results.isNotEmpty(),
-                    enter = fadeIn(animationSpec = tween(300)),
-                    exit = fadeOut()
-                ) {
-                    LazyColumn(
-                        contentPadding = PaddingValues(
-                            start = 20.dp,
-                            end = 20.dp,
-                            bottom = 80.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(
                             items = results,
                             key = { _, group -> group.groupId }
                         ) { index, group ->
-                            // Staggered entrance animation per card
                             val animatable = remember { Animatable(0f) }
                             LaunchedEffect(group.groupId) {
                                 animatable.animateTo(
@@ -288,69 +278,23 @@ fun SearchScreen(
                             }
                         }
                     }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(
+                            start = 20.dp,
+                            end = 20.dp,
+                            bottom = 80.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(5) {
+                            ShimmerGroupCard()
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-// ── Empty state composable ─────────────────────────────
-
-/**
- * Illustration shown when the search yields no results.
- */
-@Composable
-private fun EmptySearchState(query: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Decorative circle with icon
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            Color.Transparent
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.SearchOff,
-                contentDescription = "No results",
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = if (query.isNotBlank()) "No groups found for '$query'"
-            else "Start typing to search",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = if (query.isNotBlank()) "Try different keywords or change the category filter."
-            else "Find study groups by name or subject.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
     }
 }
 

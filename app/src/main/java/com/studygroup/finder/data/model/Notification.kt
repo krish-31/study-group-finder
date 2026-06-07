@@ -21,6 +21,7 @@ data class Notification(
     val message: String = "",
     val type: String = TYPE_ANNOUNCEMENT,
     val isRead: Boolean = false,
+    val groupId: String = "",
     val createdAt: Long = System.currentTimeMillis()
 ) {
     companion object {

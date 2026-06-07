@@ -27,6 +27,10 @@ import com.studygroup.finder.ui.groups.GroupViewModel
 import com.studygroup.finder.ui.groups.GroupListScreen
 import com.studygroup.finder.ui.groups.CreateGroupScreen
 import com.studygroup.finder.ui.groups.GroupDetailScreen
+import com.studygroup.finder.ui.groups.JoinRequestsScreen
+import com.studygroup.finder.ui.profile.EditProfileScreen
+import com.studygroup.finder.ui.profile.ProfileScreen
+import com.studygroup.finder.ui.profile.ProfileViewModel
 import com.studygroup.finder.ui.search.SearchScreen
 import com.studygroup.finder.ui.search.SearchViewModel
 import com.studygroup.finder.ui.sessions.ScheduleSessionScreen
@@ -34,6 +38,9 @@ import com.studygroup.finder.ui.sessions.SessionDetailScreen
 import com.studygroup.finder.ui.sessions.SessionViewModel
 import com.studygroup.finder.ui.notifications.NotificationViewModel
 import com.studygroup.finder.ui.notifications.NotificationsScreen
+import com.studygroup.finder.ui.tracking.ActivityTrackingScreen
+import com.studygroup.finder.ui.admin.AdminPanelScreen
+import com.studygroup.finder.ui.admin.AdminViewModel
 
 /**
  * Top-level navigation graph for the Study Group Finder app.
@@ -114,10 +121,13 @@ fun AppNavGraph(
             val currentRoute = navBackStackEntry?.destination?.route
             val notifState by notifViewModel.uiState.collectAsState()
 
+            val homeUiState by homeViewModel.uiState.collectAsState()
+
             HomeScreen(
                 viewModel = homeViewModel,
                 currentRoute = currentRoute,
                 unreadNotificationCount = notifState.unreadCount,
+                isAdmin = homeUiState.currentUser?.isAdmin == true,
                 onNavigateToSearch = {
                     navController.navigate(Screen.Search.route)
                 },
@@ -141,11 +151,33 @@ fun AppNavGraph(
         }
 
         composable(Screen.Profile.route) {
-            PlaceholderScreen("Profile")
+            val profileViewModel: ProfileViewModel = hiltViewModel()
+
+            ProfileScreen(
+                viewModel = profileViewModel,
+                onNavigateToEditProfile = {
+                    navController.navigate(Screen.EditProfile.route)
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(Screen.EditProfile.route) {
-            PlaceholderScreen("Edit Profile")
+            val profileViewModel: ProfileViewModel = hiltViewModel()
+
+            EditProfileScreen(
+                viewModel = profileViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         // ── Groups ──────────────────────────────────
@@ -154,9 +186,13 @@ fun AppNavGraph(
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
 
+            // Load current user to check admin status
+            val currentUserProfile by groupViewModel.currentUserProfile.collectAsState()
+
             GroupListScreen(
                 viewModel = groupViewModel,
                 currentRoute = currentRoute,
+                isAdmin = currentUserProfile?.isAdmin == true,
                 onNavigateToCreateGroup = {
                     navController.navigate(Screen.CreateGroup.route)
                 },
@@ -198,6 +234,9 @@ fun AppNavGraph(
                 },
                 onNavigateToSchedule = { id ->
                     navController.navigate(Screen.ScheduleSession.createRoute(id))
+                },
+                onNavigateToJoinRequests = { id ->
+                    navController.navigate(Screen.JoinRequests.createRoute(id))
                 }
             )
         }
@@ -206,6 +245,26 @@ fun AppNavGraph(
             val groupViewModel: GroupViewModel = hiltViewModel()
 
             CreateGroupScreen(
+                viewModel = groupViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = Screen.JoinRequests.route,
+            arguments = listOf(
+                navArgument(Screen.JoinRequests.ARG_GROUP_ID) {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val groupId = backStackEntry.arguments?.getString(Screen.JoinRequests.ARG_GROUP_ID).orEmpty()
+            val groupViewModel: GroupViewModel = hiltViewModel()
+
+            JoinRequestsScreen(
+                groupId = groupId,
                 viewModel = groupViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
@@ -290,6 +349,9 @@ fun AppNavGraph(
                 viewModel = notificationViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToJoinRequests = { id ->
+                    navController.navigate(Screen.JoinRequests.createRoute(id))
                 }
             )
         }
@@ -307,14 +369,33 @@ fun AppNavGraph(
             PlaceholderScreen("Reviews\ngroupId = $groupId")
         }
 
-        // ── Tracking ────────────────────────────────
+        // ── Tracking ────────────────────────────────────
         composable(Screen.ActivityTracking.route) {
-            PlaceholderScreen("Activity Tracking")
+            val profileViewModel: ProfileViewModel = hiltViewModel()
+
+            ActivityTrackingScreen(
+                viewModel = profileViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         // ── Admin ───────────────────────────────────
         composable(Screen.AdminPanel.route) {
-            PlaceholderScreen("Admin Panel")
+            val adminViewModel: AdminViewModel = hiltViewModel()
+
+            AdminPanelScreen(
+                viewModel = adminViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onUnauthorized = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.AdminPanel.route) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

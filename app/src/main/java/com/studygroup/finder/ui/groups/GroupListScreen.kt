@@ -1,30 +1,17 @@
 package com.studygroup.finder.ui.groups
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -35,6 +22,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,12 +30,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.studygroup.finder.ui.components.EmptyStateView
 import com.studygroup.finder.ui.home.components.BottomNavBar
 import com.studygroup.finder.ui.home.components.GroupCard
 
@@ -66,6 +51,7 @@ import com.studygroup.finder.ui.home.components.GroupCard
 fun GroupListScreen(
     viewModel: GroupViewModel,
     currentRoute: String?,
+    isAdmin: Boolean = false,
     onNavigateToCreateGroup: () -> Unit,
     onNavigateToGroupDetail: (groupId: String) -> Unit,
     onNavigateToExplore: () -> Unit,
@@ -112,6 +98,7 @@ fun GroupListScreen(
         bottomBar = {
             BottomNavBar(
                 currentRoute = currentRoute,
+                isAdmin = isAdmin,
                 onItemClick = onBottomNavClick
             )
         },
@@ -129,103 +116,32 @@ fun GroupListScreen(
             }
         }
     ) { innerPadding ->
-
-        // ── Loading state ───────────────────────────
-        AnimatedVisibility(
-            visible = isLoading && userGroups.isEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-        }
-
-        // ── Content ─────────────────────────────────
-        AnimatedVisibility(
-            visible = !isLoading || userGroups.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            if (userGroups.isEmpty()) {
-                // Empty state
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    // Illustration Circle
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        Color.Transparent
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Groups,
-                            contentDescription = "No Groups",
-                            modifier = Modifier.size(56.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = "No Groups Joined Yet",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Join or create a study group to collaborate with friends, schedule study sessions, and share learning materials.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    Button(
-                        onClick = onNavigateToExplore,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        modifier = Modifier.fillMaxWidth(0.6f)
-                    ) {
-                        Text(
-                            text = "Explore Groups",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                        )
-                    }
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = {
+                currentUser?.let {
+                    viewModel.loadUserGroups(it.userId)
                 }
-            } else {
-                // List of groups
-                LazyColumn(
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            if (userGroups.isEmpty() && !isLoading) {
+                EmptyStateView(
+                    icon = Icons.Outlined.Groups,
+                    title = "No Groups Joined Yet",
+                    subtitle = "Join or create a study group to collaborate with friends, schedule study sessions, and share learning materials.",
+                    actionButtonText = "Explore Groups",
+                    onActionClick = onNavigateToExplore,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
+                        .verticalScroll(rememberScrollState())
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     items(

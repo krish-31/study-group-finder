@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.studygroup.finder.data.model.User
 import com.studygroup.finder.data.repository.AuthRepository
 import com.studygroup.finder.data.repository.UserRepository
+import com.studygroup.finder.core.utils.ErrorHandler
+import com.studygroup.finder.core.utils.NetworkUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +40,8 @@ sealed class AuthState {
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
     // ── Login state ─────────────────────────────────
@@ -58,16 +61,26 @@ class AuthViewModel @Inject constructor(
     fun login(email: String, password: String) {
         viewModelScope.launch {
             _loginState.value = AuthState.Loading
+            if (!networkUtils.isNetworkAvailable()) {
+                _loginState.value = AuthState.Error("No internet connection. Please check your network settings and try again.")
+                return@launch
+            }
 
-            authRepository.loginUser(email, password)
-                .onSuccess { user ->
-                    _loginState.value = AuthState.Success(user)
-                }
-                .onFailure { throwable ->
-                    _loginState.value = AuthState.Error(
-                        throwable.localizedMessage ?: "Login failed. Please try again."
-                    )
-                }
+            try {
+                authRepository.loginUser(email, password)
+                    .onSuccess { user ->
+                        _loginState.value = AuthState.Success(user)
+                    }
+                    .onFailure { throwable ->
+                        _loginState.value = AuthState.Error(
+                            ErrorHandler.getErrorMessage(throwable, networkUtils)
+                        )
+                    }
+            } catch (e: Exception) {
+                _loginState.value = AuthState.Error(
+                    ErrorHandler.getErrorMessage(e, networkUtils)
+                )
+            }
         }
     }
 
@@ -77,18 +90,35 @@ class AuthViewModel @Inject constructor(
     fun register(email: String, password: String, name: String) {
         viewModelScope.launch {
             _registerState.value = AuthState.Loading
+            if (!networkUtils.isNetworkAvailable()) {
+                _registerState.value = AuthState.Error("No internet connection. Please check your network settings and try again.")
+                return@launch
+            }
 
-            authRepository.registerUser(email, password, name)
-                .onSuccess { user ->
-                    // Persist user profile to Firestore
-                    userRepository.createUserProfile(user)
-                    _registerState.value = AuthState.Success(user)
-                }
-                .onFailure { throwable ->
-                    _registerState.value = AuthState.Error(
-                        throwable.localizedMessage ?: "Registration failed. Please try again."
-                    )
-                }
+            try {
+                authRepository.registerUser(email, password, name)
+                    .onSuccess { user ->
+                        // Persist user profile to Firestore
+                        userRepository.createUserProfile(user)
+                            .onSuccess {
+                                _registerState.value = AuthState.Success(user)
+                            }
+                            .onFailure { throwable ->
+                                _registerState.value = AuthState.Error(
+                                    ErrorHandler.getErrorMessage(throwable, networkUtils)
+                                )
+                            }
+                    }
+                    .onFailure { throwable ->
+                        _registerState.value = AuthState.Error(
+                            ErrorHandler.getErrorMessage(throwable, networkUtils)
+                        )
+                    }
+            } catch (e: Exception) {
+                _registerState.value = AuthState.Error(
+                    ErrorHandler.getErrorMessage(e, networkUtils)
+                )
+            }
         }
     }
 

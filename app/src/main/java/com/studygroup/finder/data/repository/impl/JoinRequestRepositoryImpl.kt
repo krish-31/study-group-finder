@@ -75,4 +75,20 @@ class JoinRequestRepositoryImpl @Inject constructor(
 
         awaitClose { listenerRegistration.remove() }
     }
+
+    override fun getAllPendingRequestsFlow(): Flow<List<JoinRequest>> = callbackFlow {
+        val listenerRegistration: ListenerRegistration = requestsCollection
+            .whereEqualTo("status", JoinRequest.STATUS_PENDING)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val requests = snapshot?.toObjects(JoinRequest::class.java).orEmpty()
+                trySend(requests)
+            }
+
+        awaitClose { listenerRegistration.remove() }
+    }
 }
