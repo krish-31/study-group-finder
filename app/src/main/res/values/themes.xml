@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme (used only for splash / pre-Compose) -->
+    <style name="Theme.StudyGroupFinder" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/primary</item>
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+
+    <!-- Splash screen theme -->
+    <style name="Theme.StudyGroupFinder.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/primary</item>
+        <item name="postSplashScreenTheme">@style/Theme.StudyGroupFinder</item>
+    </style>
+
+</resources>
