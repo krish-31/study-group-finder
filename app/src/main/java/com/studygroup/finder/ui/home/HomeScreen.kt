@@ -25,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -67,6 +69,7 @@ import com.studygroup.finder.ui.home.components.GroupCard
 fun HomeScreen(
     viewModel: HomeViewModel,
     currentRoute: String?,
+    unreadNotificationCount: Int = 0,
     onNavigateToSearch: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToCreateGroup: () -> Unit,
@@ -98,11 +101,24 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = onNavigateToNotifications) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Notifications",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
+                        BadgedBox(
+                            badge = {
+                                if (unreadNotificationCount > 0) {
+                                    Badge {
+                                        Text(
+                                            text = if (unreadNotificationCount > 99) "99+"
+                                            else unreadNotificationCount.toString()
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

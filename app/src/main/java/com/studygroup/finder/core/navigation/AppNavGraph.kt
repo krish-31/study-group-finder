@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,8 @@ import com.studygroup.finder.ui.search.SearchViewModel
 import com.studygroup.finder.ui.sessions.ScheduleSessionScreen
 import com.studygroup.finder.ui.sessions.SessionDetailScreen
 import com.studygroup.finder.ui.sessions.SessionViewModel
+import com.studygroup.finder.ui.notifications.NotificationViewModel
+import com.studygroup.finder.ui.notifications.NotificationsScreen
 
 /**
  * Top-level navigation graph for the Study Group Finder app.
@@ -106,12 +109,15 @@ fun AppNavGraph(
         // ── Main ────────────────────────────────────
         composable(Screen.Home.route) {
             val homeViewModel: HomeViewModel = hiltViewModel()
+            val notifViewModel: NotificationViewModel = hiltViewModel()
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
+            val notifState by notifViewModel.uiState.collectAsState()
 
             HomeScreen(
                 viewModel = homeViewModel,
                 currentRoute = currentRoute,
+                unreadNotificationCount = notifState.unreadCount,
                 onNavigateToSearch = {
                     navController.navigate(Screen.Search.route)
                 },
@@ -278,7 +284,14 @@ fun AppNavGraph(
 
         // ── Notifications ───────────────────────────
         composable(Screen.Notifications.route) {
-            PlaceholderScreen("Notifications")
+            val notificationViewModel: NotificationViewModel = hiltViewModel()
+
+            NotificationsScreen(
+                viewModel = notificationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
 
         // ── Reviews ─────────────────────────────────
