@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.studygroup.finder.ui.sessions
 
 import androidx.compose.foundation.background
@@ -16,7 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,6 +35,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import com.studygroup.finder.data.model.StudySession
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,7 +54,7 @@ private val CompletedGrey = Color(0xFF9CA3AF)
 /**
  * Reusable card displaying a [StudySession].
  *
- * Shows the session title, formatted date/time, duration, location,
+ * Shows the session title, formatted date/time, duration, session link,
  * and a colour-coded status chip. An optional "Mark Complete" button
  * appears when the session is active and the viewer is the group creator.
  *
@@ -173,22 +179,40 @@ fun SessionCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // ── Location ────────────────────────────
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = "Location",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = session.location.ifBlank { "Online" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // ── Session Link ────────────────────────
+            if (session.sessionLink.isNotBlank()) {
+                val context = LocalContext.current
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        val url = if (session.sessionLink.startsWith("http://") ||
+                            session.sessionLink.startsWith("https://")
+                        ) {
+                            session.sessionLink
+                        } else {
+                            "https://${session.sessionLink}"
+                        }
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Link,
+                        contentDescription = "Session Link",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = session.sessionLink,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.primary,
+                            textDecoration = TextDecoration.Underline
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             // ── Action buttons ──────────────────────

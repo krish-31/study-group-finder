@@ -28,13 +28,13 @@ import javax.inject.Inject
  * @property title           session title / topic.
  * @property dateTimeMillis  selected date+time in epoch milliseconds.
  * @property durationMinutes expected duration in minutes.
- * @property location        physical address or "Online".
+ * @property sessionLink     clickable meeting link (e.g. Zoom, Google Meet URL).
  */
 data class SessionFormState(
     val title: String = "",
     val dateTimeMillis: Long = System.currentTimeMillis() + 3_600_000, // default: 1 h from now
     val durationMinutes: String = "60",
-    val location: String = "Online"
+    val sessionLink: String = ""
 )
 
 /**
@@ -89,8 +89,8 @@ class SessionViewModel @Inject constructor(
         _uiState.update { it.copy(formState = it.formState.copy(durationMinutes = duration)) }
     }
 
-    fun onLocationChanged(location: String) {
-        _uiState.update { it.copy(formState = it.formState.copy(location = location)) }
+    fun onSessionLinkChanged(link: String) {
+        _uiState.update { it.copy(formState = it.formState.copy(sessionLink = link)) }
     }
 
     // ── Core actions ────────────────────────────────
@@ -177,7 +177,7 @@ class SessionViewModel @Inject constructor(
                     title = form.title.trim(),
                     dateTime = form.dateTimeMillis,
                     durationMinutes = duration,
-                    location = form.location.trim().ifBlank { "Online" },
+                    sessionLink = form.sessionLink.trim(),
                     status = StudySession.STATUS_UPCOMING
                 )
 

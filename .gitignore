@@ -45,3 +45,6 @@ obj/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Google Services config
+google-services.json

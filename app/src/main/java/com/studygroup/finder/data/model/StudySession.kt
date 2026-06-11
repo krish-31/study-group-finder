@@ -10,7 +10,7 @@ import com.google.firebase.firestore.DocumentId
  * @property title Short title or topic for the session.
  * @property dateTime Scheduled start time in epoch milliseconds.
  * @property durationMinutes Expected duration of the session in minutes.
- * @property location Physical location or "Online" for virtual sessions.
+ * @property sessionLink Clickable meeting link (e.g. Zoom, Google Meet) for the session.
  * @property status Current status: "upcoming", "active", or "completed".
  */
 data class StudySession(
@@ -20,7 +20,7 @@ data class StudySession(
     val title: String = "",
     val dateTime: Long = System.currentTimeMillis(),
     val durationMinutes: Int = 60,
-    val location: String = "Online",
+    val sessionLink: String = "",
     val status: String = STATUS_UPCOMING
 ) {
     companion object {

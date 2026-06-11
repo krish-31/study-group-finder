@@ -18,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.Button
@@ -62,7 +62,7 @@ import java.util.Locale
 /**
  * Screen for scheduling a new study session within a group.
  *
- * Contains form fields for title, date/time, duration, and location.
+ * Contains form fields for title, date/time, duration, and session link.
  * On successful creation the ViewModel sends notifications to all
  * group members and the screen navigates back.
  *
@@ -308,15 +308,15 @@ fun ScheduleSessionScreen(
                 )
             )
 
-            // ── Location ───────────────────────────
+            // ── Session Link ───────────────────────
             OutlinedTextField(
-                value = form.location,
-                onValueChange = { viewModel.onLocationChanged(it) },
-                label = { Text("Location") },
-                placeholder = { Text("Online or room number") },
+                value = form.sessionLink,
+                onValueChange = { viewModel.onSessionLinkChanged(it) },
+                label = { Text("Session Link") },
+                placeholder = { Text("e.g. https://meet.google.com/abc-xyz") },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.LocationOn,
+                        imageVector = Icons.Default.Link,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
